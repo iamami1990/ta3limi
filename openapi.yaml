@@ -1,0 +1,458 @@
+openapi: 3.0.3
+info:
+  title: Ta3limi API
+  description: API REST pour la plateforme éducative tunisienne Ta3limi
+  version: 1.0.0
+  contact:
+    email: contact@ta3limi.tn
+
+servers:
+  - url: https://ta3limi.pages.dev/api
+    description: Production
+  - url: http://localhost:3000/api
+    description: Développement local
+
+tags:
+  - name: Authentication
+    description: Endpoints d'authentification
+  - name: Courses
+    description: Gestion des cours
+  - name: Quizzes
+    description: Gestion des quizz
+  - name: Users
+    description: Gestion des utilisateurs
+  - name: Progress
+    description: Suivi de progression
+  - name: Subscriptions
+    description: Gestion des abonnements
+  - name: Live
+    description: Sessions live
+  - name: Admin
+    description: Administration (admin only)
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+        role:
+          type: string
+          enum: [eleve, parent, enseignant, admin]
+        nom:
+          type: string
+        classe:
+          type: string
+        photo_url:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    Course:
+      type: object
+      properties:
+        id:
+          type: integer
+        titre:
+          type: string
+        niveau:
+          type: string
+          enum: [primaire, college, lycee]
+        matiere:
+          type: string
+        description:
+          type: string
+        enseignant_id:
+          type: integer
+        video_url:
+          type: string
+        pdf_url:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    Quiz:
+      type: object
+      properties:
+        id:
+          type: integer
+        titre:
+          type: string
+        questions:
+          type: string
+          description: JSON array of questions
+        course_id:
+          type: integer
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      tags: [Authentication]
+      responses:
+        '200':
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  timestamp:
+                    type: string
+
+  /auth/register:
+    post:
+      summary: Register a new user
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, role]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 6
+                role:
+                  type: string
+                  enum: [eleve, parent, enseignant, admin]
+                nom:
+                  type: string
+                classe:
+                  type: string
+                parent_id:
+                  type: integer
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  token:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/User'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/login:
+    post:
+      summary: Login
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                remember:
+                  type: boolean
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  token:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/User'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /courses:
+    get:
+      summary: Get all courses
+      tags: [Courses]
+      parameters:
+        - in: query
+          name: niveau
+          schema:
+            type: string
+            enum: [primaire, college, lycee]
+        - in: query
+          name: matiere
+          schema:
+            type: string
+        - in: query
+          name: search
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of courses
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  courses:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Course'
+
+    post:
+      summary: Create a new course
+      tags: [Courses]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [titre, niveau, matiere]
+              properties:
+                titre:
+                  type: string
+                niveau:
+                  type: string
+                  enum: [primaire, college, lycee]
+                matiere:
+                  type: string
+                description:
+                  type: string
+                video_url:
+                  type: string
+                pdf_url:
+                  type: string
+      responses:
+        '201':
+          description: Course created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  course:
+                    $ref: '#/components/schemas/Course'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden (enseignant/admin only)
+
+  /courses/{id}:
+    get:
+      summary: Get course by ID
+      tags: [Courses]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Course details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  course:
+                    $ref: '#/components/schemas/Course'
+        '404':
+          description: Course not found
+
+  /quizzes/{id}/submit:
+    post:
+      summary: Submit quiz answers
+      tags: [Quizzes]
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [answers]
+              properties:
+                answers:
+                  type: array
+                  items:
+                    type: integer
+      responses:
+        '200':
+          description: Quiz results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  score:
+                    type: integer
+                  correct:
+                    type: integer
+                  total:
+                    type: integer
+
+  /progress:
+    get:
+      summary: Get user progress
+      tags: [Progress]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: User progress
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  progress:
+                    type: array
+                    items:
+                      type: object
+
+  /progress/stats:
+    get:
+      summary: Get user statistics
+      tags: [Progress]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: User statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  stats:
+                    type: object
+                    properties:
+                      totalCourses:
+                        type: integer
+                      averageScore:
+                        type: integer
+                      byMatiere:
+                        type: array
+                        items:
+                          type: object
+
+  /subscriptions:
+    get:
+      summary: Get user subscription
+      tags: [Subscriptions]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Subscription details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  subscription:
+                    type: object
+
+  /subscriptions/upgrade:
+    post:
+      summary: Upgrade to premium
+      tags: [Subscriptions]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Upgraded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+
+  /admin/stats:
+    get:
+      summary: Get admin statistics
+      tags: [Admin]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Admin statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  stats:
+                    type: object
+        '403':
+          description: Forbidden (admin only)
